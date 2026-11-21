@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cronograma – Paróquia São Francisco de Assis</title>
+<style>
+:root{--m:#6b1d1d;--m2:#8a2b2b;--w:#fff;--bg:#faf5f3;--ln:#e6d5d0;--ok:#1d6b3a;--bad:#b00020;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:#2b1a1a;font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;min-height:100vh}
+header{background:var(--m);color:var(--w);padding:16px 14px 12px;text-align:center;position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+header h1{font-size:17px;margin:0;letter-spacing:.5px}
+.bal{margin:10px auto 0;background:var(--w);color:var(--m);border-radius:12px;padding:8px 12px;font-weight:700}
+.bal small{display:block;font-weight:400;opacity:.8}
+.bal.ok b{color:var(--ok)}.bal.bad b{color:var(--bad)}
+.tabs{display:flex;gap:8px;padding:12px 14px 4px}
+.tabs button{flex:1;padding:10px;border:2px solid var(--m);background:var(--w);color:var(--m);border-radius:10px;font-weight:700;font-size:15px}
+.tabs button.on{background:var(--m);color:var(--w)}
+.wrap{padding:8px 14px 40px}
+.tl{border-left:3px solid var(--m);margin-left:6px;padding-left:14px}
+.card{background:var(--w);border:1px solid var(--ln);border-radius:12px;padding:10px 12px;margin:12px 0;position:relative}
+.card:before{content:"";position:absolute;left:-23px;top:16px;width:11px;height:11px;border-radius:50%;background:var(--m);border:2px solid var(--w)}
+.card.al{background:#f3e3df;border-color:var(--m2)}.card.al:before{background:var(--w);border-color:var(--m)}
+.t{font-size:13px;color:var(--m2);font-weight:700}.d{font-weight:600;margin:2px 0 6px}
+.row{display:flex;justify-content:space-between;font-size:13px;gap:8px}.row span:last-child{font-weight:600}
+.pos{color:var(--ok)}.neg{color:var(--bad)}
+.obs{background:var(--m);color:var(--w);border-radius:12px;padding:12px;margin-top:18px;white-space:pre-wrap}
+.obs h3{margin:0 0 4px;font-size:14px}
+button.b{background:var(--m);color:var(--w);border:0;border-radius:9px;padding:9px 12px;font-size:14px;font-weight:600;margin:4px 4px 0 0}
+button.b.l{background:var(--w);color:var(--m);border:1.5px solid var(--m)}
+button.b.x{background:var(--bad)}
+input,select,textarea{font:inherit;padding:9px;border:1.5px solid var(--ln);border-radius:9px;width:100%;margin:4px 0}
+label{font-size:13px;font-weight:600;color:var(--m)}
+.box{background:var(--w);border:1px solid var(--ln);border-radius:12px;padding:12px;margin:14px 0}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.top{display:flex;justify-content:flex-end;padding:8px 14px 0}.top a{color:var(--m);font-weight:700;font-size:14px;text-decoration:none;border:1.5px solid var(--m);border-radius:9px;padding:5px 10px}
+.mod{position:fixed;inset:0;background:#0007;display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.mod>div{background:var(--w);width:100%;max-width:560px;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.mod h3{margin:0 0 8px;color:var(--m)}
+.opt{display:block;width:100%;text-align:left;padding:11px;margin:6px 0;border:2px solid var(--ln);border-radius:10px;background:var(--w);font-size:15px}
+.opt.on{border-color:var(--m);background:#f3e3df;font-weight:700}
+.msg{text-align:center;padding:30px 16px;color:var(--m)}
+</style></head><body>
+<div id="app"><div class="msg">Carregando…</div></div>
+<script>
+const NOME="PARÓQUIA SÃO FRANCISCO DE ASSIS";
+const PIN="1515";let unlocked=false;try{unlocked=sessionStorage.getItem("adm")==="1"}catch(e){}
+let db=null,col=null,canEdit=false,events=[],day="sab",mode=location.hash==="#admin"?"admin":"user",modal=null,loaded=false;
+const DN={sab:"Sábado",dom:"Domingo"};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const toS=t=>{if(!t)return null;const[a,b,c]=t.split(":").map(Number);return a*3600+b*60+(c||0)};
+const p2=n=>String(n).padStart(2,"0");
+const hms=s=>{s=Math.abs(Math.round(s));return p2(Math.floor(s/3600))+":"+p2(Math.floor(s%3600/60))+":"+p2(s%60)};
+const sgn=s=>s===0?"00:00:00":(s>0?"+":"−")+hms(s);
+const cls=s=>s>0?"pos":s<0?"neg":"";
+const full=t=>t&&t.length===5?t+":00":t;
+const now=()=>new Date().toTimeString().slice(0,8);
+const list=()=>events.filter(e=>e.day===day&&e.type!=="obs").sort((a,b)=>toS(a.start)-toS(b.start));
+const evs=()=>list().filter(e=>e.type==="ev");
+const dur=e=>toS(e.end)-toS(e.start);
+const real=e=>e.realStart&&e.realEnd?toS(e.realEnd)-toS(e.realStart):null;
+const upd=(id,d)=>db.doc("cron/"+id).update(d);
+const msg=t=>{modal={t:"info",text:t};render()};
+
+function balance(){
+  const done=evs().filter(e=>e.realEnd);
+  if(!done.length)return`<div class="bal"><small>Saldo do dia</small><b>Aguardando início</b></div>`;
+  const e=done[done.length-1],b=toS(e.end)-toS(e.realEnd);
+  const txt=b>0?"Tempo sobrando: "+hms(b):b<0?"Atrasado: "+hms(b):"Exatamente no horário";
+  return`<div class="bal ${b>=0?"ok":"bad"}"><small>Saldo do dia (último evento finalizado)</small><b>${txt}</b></div>`;
+}
+function card(e,adm){
+  if(e.type==="al")return`<div class="card al"><div class="t">🔔 ${e.start}</div><div class="d">${esc(e.desc)}</div>${adm?`<button class="b l" data-a="edit" data-id="${e.id}">Editar</button><button class="b x" data-a="del" data-id="${e.id}">Excluir</button>`:""}</div>`;
+  const r=real(e),res=r!=null?dur(e)-r:null;
+  let h=`<div class="card"><div class="t">${e.start} → ${e.end}</div><div class="d">${esc(e.desc)}</div>
+  <div class="row"><span>Programado</span><span>${hms(dur(e))}</span></div>`;
+  if(e.realStart)h+=`<div class="row"><span>Início real</span><span>${e.realStart}</span></div>`;
+  if(e.realEnd)h+=`<div class="row"><span>Fim real</span><span>${e.realEnd}</span></div>`;
+  if(r!=null)h+=`<div class="row"><span>Realizado</span><span>${hms(r)}</span></div><div class="row"><span>Resultado</span><span class="${cls(res)}">${sgn(res)}</span></div>`;
+  else if(e.realStart)h+=`<div class="row"><span>Situação</span><span>Em andamento</span></div>`;
+  if(adm){
+    if(!e.realStart)h+=`<button class="b" data-a="s-now" data-id="${e.id}">Iniciar agora</button><button class="b l" data-a="s-sch" data-id="${e.id}">No agendado</button><button class="b l" data-a="s-typ" data-id="${e.id}">Digitar início</button>`;
+    else if(!e.realEnd)h+=`<button class="b" data-a="end" data-id="${e.id}">Finalizar</button>`;
+    if(e.realStart)h+=`<button class="b l" data-a="reset" data-id="${e.id}">Desfazer</button>`;
+    h+=`<button class="b l" data-a="edit" data-id="${e.id}">Editar</button><button class="b x" data-a="del" data-id="${e.id}">Excluir</button>`;
+  }
+  return h+"</div>";
+}
+function obsText(){const o=events.find(e=>e.id==="obs_"+day);return o?o.text:""}
+function render(){
+  const app=$("#app");
+  if(!loaded){return}
+  if(!db){app.innerHTML=`<div class="msg">Entre na sua conta Claude para ver o cronograma.</div>`;return}
+  if(mode==="admin"&&canEdit&&!unlocked){app.innerHTML=`<header><h1>${NOME}</h1></header><div class="wrap"><div class="box"><b>Área do administrador</b><label>PIN de acesso</label><input id="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"><div id="pinerr" class="neg"></div><button class="b" data-a="pin">Entrar</button><button class="b l" data-a="back">Voltar</button></div></div>`;return}
+  const adm=mode==="admin"&&canEdit;
+  let h=`<header><h1>${NOME}</h1>${balance()}</header>`;
+  if(canEdit)h+=`<div class="top"><a href="#${adm?"":"admin"}" id="sw">${adm?"Ver como usuário":"Área do administrador"}</a></div>`;
+  h+=`<div class="tabs">${["sab","dom"].map(d=>`<button class="${d===day?"on":""}" data-a="day" data-d="${d}">${DN[d]}</button>`).join("")}</div><div class="wrap">`;
+  const L=list();
+  h+=L.length?`<div class="tl">${L.map(e=>card(e,adm)).join("")}</div>`:`<div class="msg">Nenhum evento cadastrado para ${DN[day]}.</div>`;
+  const ot=obsText();
+  if(ot&&!adm)h+=`<div class="obs"><h3>Observações</h3>${esc(ot)}</div>`;
+  if(adm){
+    h+=`<div class="box"><b>Novo evento – ${DN[day]}</b><label>Descrição</label><input id="ed" placeholder="Ex.: Missa de abertura">
+    <div class="g2"><div><label>Hora inicial</label><input id="es" type="time" step="1" value="08:00:00"></div><div><label>Hora final</label><input id="ee" type="time" step="1" value="09:00:00"></div></div>
+    <div class="row" id="pv"></div><button class="b" data-a="add">Cadastrar evento</button></div>
+    <div class="box"><b>Novo alerta – ${DN[day]}</b><label>Descrição do alerta</label><input id="ad"><label>Horário</label><input id="at" type="time" step="1" value="08:00:00"><button class="b" data-a="addal">Cadastrar alerta</button></div>
+    <div class="box"><b>Observações – ${DN[day]}</b><textarea id="ob" rows="4" placeholder="Aparece no final da linha do tempo do usuário">${esc(ot)}</textarea><button class="b" data-a="obs">Salvar observações</button></div>
+    <div class="box"><b>Dados</b><br><button class="b l" data-a="reset-all">Restaurar cronograma original</button></div>`;
+  }
+  h+="</div>";
+  if(modal)h+=modalHtml();
+  const keep=document.activeElement&&document.activeElement.id;
+  const vals={};document.querySelectorAll("#app input,#app textarea").forEach(i=>{if(i.id)vals[i.id]=i.value});
+  app.innerHTML=h;
+  Object.entries(vals).forEach(([k,v])=>{const i=document.getElementById(k);if(i)i.value=v});
+  prev();
+}
+function prev(){const a=$("#es"),b=$("#ee"),p=$("#pv");if(a&&b&&p){const d=toS(full(b.value))-toS(full(a.value));p.innerHTML=`<span>Tempo total</span><span class="${d<0?"neg":""}">${isNaN(d)?"--":sgn(d).replace("+","")}</span>`}}
+function nextEv(id){const L=evs();const i=L.findIndex(e=>e.id===id);return L.slice(i+1).find(e=>!e.realStart)}
+function modalHtml(){
+  const m=modal,e=events.find(x=>x.id===m.id);let b="";
+  if(m.t==="end"){
+    const o=[["now","Nesse Momento"],["sch","No Horário Agendado ("+e.end+")"],["typ","Digitar"]];
+    b=`<h3>Horário finalizado</h3>${o.map(([k,l])=>`<button class="opt ${m.c===k?"on":""}" data-a="ch" data-c="${k}">${l}</button>`).join("")}
+    ${m.c==="typ"?`<input id="mv" type="time" step="1" value="${now()}">`:""}
+    <button class="b" data-a="end-ok">OK</button><button class="b l" data-a="close">Cancelar</button>`;
+  }else if(m.t==="s-typ"){
+    b=`<h3>Horário de início</h3><input id="mv" type="time" step="1" value="${now()}"><button class="b" data-a="s-ok">OK</button><button class="b l" data-a="close">Cancelar</button>`;
+  }else if(m.t==="next"){
+    const n=events.find(x=>x.id===m.nid);
+    b=`<h3>Próximo evento</h3><p>Iniciar “${esc(n.desc)}” quando?</p>
+    <button class="opt ${m.c==="after"?"on":""}" data-a="nc" data-c="after">Imediatamente após o anterior (${m.end})</button>
+    <button class="opt ${m.c==="typ"?"on":""}" data-a="nc" data-c="typ">Digitar o horário inicial</button>
+    ${m.c==="typ"?`<input id="mv" type="time" step="1" value="${n.start}">`:""}
+    <button class="b" data-a="next-ok">OK</button><button class="b l" data-a="close">Agora não</button>`;
+  }
+  else if(m.t==="rall"){b=`<h3>Restaurar original</h3><p>Isto apaga tudo (inclusive horários reais) e recarrega o cronograma das planilhas.</p><button class="b x" data-a="rall-ok">Restaurar</button><button class="b l" data-a="close">Cancelar</button>`}
+  else if(m.t==="info"){b=`<h3>Aviso</h3><p>${esc(m.text)}</p><button class="b" data-a="close">OK</button>`}
+  else if(m.t==="del"){b=`<h3>Excluir</h3><p>Excluir “${esc(e.desc)}”? Não dá para desfazer.</p><button class="b x" data-a="del-ok">Excluir</button><button class="b l" data-a="close">Cancelar</button>`}
+  else if(m.t==="edit"){const al=e.type==="al";b=`<h3>Editar ${al?"alerta":"evento"}</h3><label>Descrição</label><input id="d2" value="${esc(e.desc)}"><div class="g2"><div><label>${al?"Horário":"Hora inicial"}</label><input id="s2" type="time" step="1" value="${e.start}"></div>${al?"":`<div><label>Hora final</label><input id="f2" type="time" step="1" value="${e.end}"></div>`}</div>${al?"":`<div class="g2"><div><label>Início real</label><input id="rs2" type="time" step="1" value="${e.realStart||""}"></div><div><label>Fim real</label><input id="re2" type="time" step="1" value="${e.realEnd||""}"></div></div>`}<button class="b" data-a="edit-ok">Salvar</button><button class="b l" data-a="close">Cancelar</button>`}
+  return`<div class="mod"><div>${b}</div></div>`;
+}
+document.addEventListener("input",e=>{if(e.target.id==="es"||e.target.id==="ee")prev()});
+window.addEventListener("hashchange",()=>{mode=location.hash==="#admin"?"admin":"user";render()});
+document.addEventListener("click",async e=>{
+  const t=e.target.closest("[data-a]");if(!t)return;
+  const a=t.dataset.a,id=t.dataset.id,D=t.dataset;
+  try{
+  if(a==="pin"){if($("#pin").value===PIN){unlocked=true;try{sessionStorage.setItem("adm","1")}catch(x){}render()}else{$("#pin").value="";$("#pinerr").textContent="PIN incorreto."}}
+  else if(a==="back"){location.hash=""}
+  else if(a==="day"){day=D.d;render()}
+  else if(a==="close"){modal=null;render()}
+  else if(a==="s-now"){await upd(id,{realStart:now()})}
+  else if(a==="s-sch"){await upd(id,{realStart:events.find(x=>x.id===id).start})}
+  else if(a==="s-typ"){modal={t:"s-typ",id};render()}
+  else if(a==="s-ok"){await upd(modal.id,{realStart:full($("#mv").value)});modal=null;render()}
+  else if(a==="end"){modal={t:"end",id,c:"now"};render()}
+  else if(a==="ch"){modal.c=D.c;render()}
+  else if(a==="end-ok"){
+    const ev=events.find(x=>x.id===modal.id);
+    const v=modal.c==="now"?now():modal.c==="sch"?ev.end:full($("#mv").value);
+    await upd(ev.id,{realEnd:v});
+    const n=nextEv(ev.id);
+    modal=n?{t:"next",id:ev.id,nid:n.id,end:v,c:"after"}:null;render();
+  }
+  else if(a==="nc"){modal.c=D.c;render()}
+  else if(a==="next-ok"){
+    const v=modal.c==="after"?modal.end:full($("#mv").value);
+    await upd(modal.nid,{realStart:v});modal=null;render();
+  }
+  else if(a==="reset"){await upd(id,{realStart:null,realEnd:null})}
+  else if(a==="del"){modal={t:"del",id};render()}
+  else if(a==="reset-all"){modal={t:"rall"};render()}
+  else if(a==="rall-ok"){store=seed();save();sync();modal=null;render()}
+  else if(a==="del-ok"){await db.doc("cron/"+modal.id).delete();modal=null;render()}
+  else if(a==="edit"){modal={t:"edit",id};render()}
+  else if(a==="edit-ok"){const ev=events.find(x=>x.id===modal.id);const d=$("#d2").value.trim(),st=full($("#s2").value);if(!d||!st)return msg("Preencha descrição e horário.");const u={desc:d,start:st};if(ev.type==="ev"){const f=full($("#f2").value);if(!f||toS(f)<=toS(st))return msg("A hora final deve ser maior que a inicial.");u.end=f;u.realStart=$("#rs2").value?full($("#rs2").value):null;u.realEnd=$("#re2").value?full($("#re2").value):null}await upd(ev.id,u);modal=null;render()}
+  else if(a==="add"){
+    const d=$("#ed").value.trim(),s=full($("#es").value),f=full($("#ee").value);
+    if(!d||!s||!f)return msg("Preencha descrição e horários.");
+    if(toS(f)<=toS(s))return msg("A hora final deve ser maior que a inicial.");
+    await db.doc("cron/ev"+Date.now()).set({type:"ev",day,desc:d,start:s,end:f});$("#ed").value="";
+  }
+  else if(a==="addal"){
+    const d=$("#ad").value.trim(),s=full($("#at").value);
+    if(!d||!s)return msg("Preencha descrição e horário.");
+    await db.doc("cron/al"+Date.now()).set({type:"al",day,desc:d,start:s});$("#ad").value="";
+  }
+  else if(a==="obs"){await db.doc("cron/obs_"+day).set({type:"obs",day,text:$("#ob").value});msg("Observações salvas.")}
+  }catch(err){msg("Erro: "+(err.message||err.code||err))}
+});
+const KEY="cronograma_psfa_v1",SEED={"ev_sab_01": {"type": "ev", "day": "sab", "start": "06:00:00", "end": "06:15:00", "desc": "Horário de chegada das equipes."}, "ev_sab_02": {"type": "ev", "day": "sab", "start": "06:30:00", "end": "07:00:00", "desc": "Início da procissão do Santíssimo. A equipe deve acompanhar a procissão do Santíssimo seguindo a orientação do Dirigente Espiritual."}, "ev_sab_03": {"type": "ev", "day": "sab", "start": "07:00:00", "end": "07:30:00", "desc": "A equipe deverá preparar-se para a recepção dos jovens."}, "ev_sab_04": {"type": "ev", "day": "sab", "start": "07:30:00", "end": "08:00:00", "desc": "Participar da Dinâmica de entrosamento/entrega dos crachás."}, "ev_sab_05": {"type": "ev", "day": "sab", "start": "08:00:00", "end": "08:20:00", "desc": "Oração Inicial com os Ejaquistas, na capela."}, "ev_sab_06": {"type": "ev", "day": "sab", "start": "08:20:00", "end": "08:30:00", "desc": "Acompanhar os Ejaquistas ao Plenário."}, "ev_sab_07": {"type": "ev", "day": "sab", "start": "08:30:00", "end": "09:10:00", "desc": "1ª Palestra – O plano de Deus para os Homens – 40 min."}, "ev_sab_08": {"type": "ev", "day": "sab", "start": "09:20:00", "end": "10:20:00", "desc": "Grupos seguem para as salas; Apresentação dos integrantes e debate."}, "ev_sab_09": {"type": "ev", "day": "sab", "start": "10:20:00", "end": "10:35:00", "desc": "Música conduz os Ejaquistas ao lanche."}, "ev_sab_10": {"type": "ev", "day": "sab", "start": "10:35:00", "end": "10:55:00", "desc": "Música conduz os Ejaquistas ao plenário; Apresentação da conclusão dos Grupos."}, "ev_sab_11": {"type": "ev", "day": "sab", "start": "10:55:00", "end": "11:15:00", "desc": "Sociodrama: O Poder e o Ter."}, "ev_sab_12": {"type": "ev", "day": "sab", "start": "11:15:00", "end": "12:00:00", "desc": "2ª Palestra – Pluralismo Religioso e Intolerância Religiosa – 45 min."}, "ev_sab_13": {"type": "ev", "day": "sab", "start": "12:00:00", "end": "13:00:00", "desc": "Conduzir Ejaquistas para as salas; Dinâmica dos Cartazes."}, "ev_sab_14": {"type": "ev", "day": "sab", "start": "13:00:00", "end": "14:00:00", "desc": "Música conduz os Ejaquistas das salas dos Grupos ao local do almoço; A equipe almoça com os Ejaquistas."}, "ev_sab_15": {"type": "ev", "day": "sab", "start": "14:00:00", "end": "14:20:00", "desc": "Acompanhar a condução dos jovens ao plenário junto com a equipe de Música; Apresentação dos cartazes."}, "ev_sab_16": {"type": "ev", "day": "sab", "start": "14:20:00", "end": "14:40:00", "desc": "Sociodrama: Médico."}, "ev_sab_17": {"type": "ev", "day": "sab", "start": "14:40:00", "end": "15:20:00", "desc": "3ª Palestra – A Fé e os caminhos para a sua Vivência – 40 min."}, "ev_sab_18": {"type": "ev", "day": "sab", "start": "15:20:00", "end": "15:35:00", "desc": "Acompanhar os jovens ao local do Deserto."}, "ev_sab_19": {"type": "ev", "day": "sab", "start": "15:35:00", "end": "16:20:00", "desc": "Acompanhar os jovens para as salas dos Grupos – Debates."}, "ev_sab_20": {"type": "ev", "day": "sab", "start": "16:20:00", "end": "16:35:00", "desc": "Acompanhar os jovens ao local do lanche."}, "ev_sab_21": {"type": "ev", "day": "sab", "start": "16:35:00", "end": "16:39:00", "desc": "Acompanhar os jovens ao plenário."}, "ev_sab_22": {"type": "ev", "day": "sab", "start": "16:40:00", "end": "17:20:00", "desc": "4ª Palestra – O Jovem, sua Identidade e Afetividade segundo o plano de Deus – 40 min."}, "ev_sab_23": {"type": "ev", "day": "sab", "start": "17:20:00", "end": "18:00:00", "desc": "Acompanhar os jovens para as salas dos Grupos – debates."}, "ev_sab_24": {"type": "ev", "day": "sab", "start": "18:00:00", "end": "18:50:00", "desc": "5ª palestra – Eucaristia – herança de Cristo – 50 min."}, "ev_sab_25": {"type": "ev", "day": "sab", "start": "18:50:00", "end": "19:00:00", "desc": "Música conduz os Ejaquistas à capela."}, "ev_sab_26": {"type": "ev", "day": "sab", "start": "19:00:00", "end": "19:25:00", "desc": "Dinâmica do Coração."}, "ev_sab_27": {"type": "ev", "day": "sab", "start": "19:25:00", "end": "19:45:00", "desc": "Adoração ao Santíssimo na capela dos jovens."}, "ev_sab_28": {"type": "ev", "day": "sab", "start": "19:45:00", "end": "19:55:00", "desc": "Avisos; Ao final dos avisos, organizar a devolução dos celulares aos Ejaquistas."}, "ev_sab_29": {"type": "ev", "day": "sab", "start": "19:55:00", "end": "20:10:00", "desc": "Música conduz os Ejaquistas à saída do local."}, "ev_sab_30": {"type": "ev", "day": "sab", "start": "20:10:00", "end": "20:25:00", "desc": "Procissão do Santíssimo Sacramento com todos os equipistas. – 15 min."}, "al_sab_1": {"type": "al", "day": "sab", "start": "09:00:00", "desc": "Receber a listagem final dos grupos da equipe de Comunicação."}, "al_sab_2": {"type": "al", "day": "sab", "start": "18:15:00", "desc": "Receber da equipe de Comunicação os celulares e aparelhos multimídia."}, "al_sab_3": {"type": "al", "day": "sab", "start": "20:30:00", "desc": "Reunião dos coordenadores gerais com os coordenadores de equipes. Fechar a sala da equipe e participar da reunião com os Coordenadores Gerais."}, "obs_sab": {"type": "obs", "day": "sab", "text": "1. A equipe deve manter-se em silêncio e ocupar o tempo ocioso com momentos de reflexão em suas salas e com visitas à Capela do Santíssimo para reflexão individual.\n\n2. Os coordenadores deverão verificar o cronograma da visita da sua equipe à Capela do Santíssimo com os coordenadores da Equipe de Oração."}, "ev_dom_01": {"type": "ev", "day": "dom", "start": "06:00:00", "end": "06:15:00", "desc": "Horário de chegada das equipes."}, "ev_dom_02": {"type": "ev", "day": "dom", "start": "06:15:00", "end": "06:30:00", "desc": "Último horário para chegada dos equipistas."}, "ev_dom_03": {"type": "ev", "day": "dom", "start": "06:30:00", "end": "07:00:00", "desc": "Início da procissão do Santíssimo. A equipe deve acompanhar a procissão do Santíssimo seguindo a orientação do Dirigente Espiritual."}, "ev_dom_04": {"type": "ev", "day": "dom", "start": "07:00:00", "end": "07:30:00", "desc": "A equipe deverá preparar-se para a recepção dos jovens."}, "ev_dom_05": {"type": "ev", "day": "dom", "start": "07:30:00", "end": "07:50:00", "desc": "Participar da dinâmica de entrosamento."}, "ev_dom_06": {"type": "ev", "day": "dom", "start": "07:50:00", "end": "08:05:00", "desc": "Oração Inicial com os Ejaquistas, na capela."}, "ev_dom_07": {"type": "ev", "day": "dom", "start": "08:05:00", "end": "08:10:00", "desc": "Música conduz os Ejaquistas ao Plenário."}, "ev_dom_08": {"type": "ev", "day": "dom", "start": "08:10:00", "end": "08:20:00", "desc": "Apresentação da peça “Life House” – 10 min."}, "ev_dom_09": {"type": "ev", "day": "dom", "start": "08:30:00", "end": "09:20:00", "desc": "6ª Palestra - Maria no plano de Deus – 50 min; Coordenadores da equipe de Grupos deverão desmontar a capela, arrumar a sala e fechá-la."}, "ev_dom_10": {"type": "ev", "day": "dom", "start": "09:20:00", "end": "10:00:00", "desc": "Grupos seguem para as salas - Debates."}, "ev_dom_11": {"type": "ev", "day": "dom", "start": "10:00:00", "end": "10:15:00", "desc": "Música conduz Ejaquistas ao lanche."}, "ev_dom_12": {"type": "ev", "day": "dom", "start": "10:15:00", "end": "10:45:00", "desc": "Música conduz Ejaquistas ao plenário; Apresentação da conclusão dos Grupos."}, "ev_dom_13": {"type": "ev", "day": "dom", "start": "10:45:00", "end": "11:05:00", "desc": "Sociodrama: Resgatando a Dignidade Humana."}, "ev_dom_14": {"type": "ev", "day": "dom", "start": "11:05:00", "end": "11:45:00", "desc": "7ª Palestra - Família: um querer de Deus – 40 min."}, "ev_dom_15": {"type": "ev", "day": "dom", "start": "11:45:00", "end": "12:25:00", "desc": "Grupos seguem para salas - Debates."}, "ev_dom_16": {"type": "ev", "day": "dom", "start": "12:25:00", "end": "13:45:00", "desc": "Música conduz Ejaquistas ao almoço; A equipe almoça com os Ejaquistas."}, "ev_dom_17": {"type": "ev", "day": "dom", "start": "13:45:00", "end": "14:35:00", "desc": "Música conduz Ejaquistas aos Grupos; Avaliação do EJAC e Dinâmica da Pintura dos tecidos."}, "ev_dom_18": {"type": "ev", "day": "dom", "start": "14:35:00", "end": "14:40:00", "desc": "Música conduz os Ejaquistas ao plenário; Arrumar a sala da equipe conforme mapa; Os tecidos deverão ser recolhidos pelos coordenadores da equipe de Grupos para serem ofertados pelos Padrinhos de Grupos no momento do Ofertório da Missa e posicionados próximo ao altar; Preencher a avaliação do Encontro."}, "ev_dom_19": {"type": "ev", "day": "dom", "start": "14:40:00", "end": "15:25:00", "desc": "8ª Palestra - É Missão do Jovem ser Instrumento de Deus na Igreja e na construção da civilização do Amor – 45 min."}, "ev_dom_20": {"type": "ev", "day": "dom", "start": "15:25:00", "end": "15:45:00", "desc": "Música conduz os Ejaquistas ao lanche."}, "ev_dom_21": {"type": "ev", "day": "dom", "start": "15:45:00", "end": "15:50:00", "desc": "Música conduz os Ejaquistas ao plenário."}, "ev_dom_22": {"type": "ev", "day": "dom", "start": "15:50:00", "end": "16:10:00", "desc": "Testemunho de Vida – 20min."}, "ev_dom_23": {"type": "ev", "day": "dom", "start": "16:10:00", "end": "16:35:00", "desc": "Sociodrama: O direito à Vida – Vela."}, "ev_dom_24": {"type": "ev", "day": "dom", "start": "16:35:00", "end": "17:30:00", "desc": "Apresentação Final do Encontro – 55 min."}, "ev_dom_25": {"type": "ev", "day": "dom", "start": "17:30:00", "end": "17:50:00", "desc": "Entrega dos envelopes, os celulares e aparelhos multimídia (cada Padrinho de Grupo entrega aos seus Ejaquistas)."}, "ev_dom_26": {"type": "ev", "day": "dom", "start": "17:50:00", "end": "18:00:00", "desc": "Música conduz os Ejaquistas ao local da Missa de encerramento. – Caminho de Velas."}, "ev_dom_27": {"type": "ev", "day": "dom", "start": "18:00:00", "end": "19:00:00", "desc": "Missa de encerramento – 01 hora."}, "ev_dom_28": {"type": "ev", "day": "dom", "start": "19:00:00", "end": "19:30:00", "desc": "Organização das salas dos grupos conforme o mapa."}, "al_dom_1": {"type": "al", "day": "dom", "start": "09:00:00", "desc": "Receber a listagem final dos grupos da equipe de Comunicação para uma conferência final dos dados da agenda."}, "al_dom_2": {"type": "al", "day": "dom", "start": "16:00:00", "desc": "Os coordenadores desta equipe deverão receber da equipe da Comunicação os envelopes, os celulares e aparelhos multimídia para serem entregues aos Ejaquistas."}, "al_dom_3": {"type": "al", "day": "dom", "start": "16:20:00", "desc": "Formação da fila para a apresentação."}, "al_dom_4": {"type": "al", "day": "dom", "start": "19:30:00", "desc": "Reunião dos Coordenadores Gerais com os Coordenadores das equipes para avaliação e entrega das chaves."}, "obs_dom": {"type": "obs", "day": "dom", "text": "1. Os Padrinhos dos Grupos deverão assistir todas as palestras e todos os sociodramas, com exceção da palestra “É missão do jovem ser instrumento de Deus na Igreja e na construção da civilização do Amor”.\n\n2. A equipe deve manter-se em silêncio e ocupar o tempo ocioso com momentos de reflexão em suas salas e com visitas à Capela do Santíssimo para reflexão individual.\n\n3. Os coordenadores deverão verificar o cronograma da visita da sua equipe à Capela do Santíssimo com os coordenadores da Equipe de Oração.\n\n4. Durante o domingo a equipe deverá realizar a avaliação do Encontro que se encontra nas pastas dos coordenadores.\n\n5. Toda a equipe deverá estar presente no ReEncontro.\n\n6. Os Coordenadores das equipes deverão reunir-se em data previamente marcada com os Coordenadores Gerais para devolver todo material patrimônio e material excedente.\n\n7. A equipe que não conseguir realizar alguma orientação deste cronograma deverá colocar por escrito na avaliação o motivo pelo qual não realizou a tarefa.\n\n8. As pastas permanecem com a equipe até o término das reuniões pós o Encontro.\n\n9. Os Padrinhos de Grupos deverão entregar as pastas aos coordenadores da equipe e estes deverão devolver à Equipe Dirigente."}};
+const seed=()=>JSON.parse(JSON.stringify(SEED));
+let store=null;try{store=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!store||!Object.keys(store).length)store=seed();
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(store))}catch(e){}};
+const sync=()=>{events=Object.entries(store).map(([id,v])=>({id,...v}));render()};
+db={doc:p=>{const id=p.split("/")[1];return{
+ update:async d=>{store[id]={...store[id],...d};save();sync()},
+ set:async d=>{store[id]=d;save();sync()},
+ delete:async()=>{delete store[id];save();sync()}}}};
+canEdit=true;loaded=true;save();sync();
+</script></body></html>
